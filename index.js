@@ -15,7 +15,6 @@ for (var i = 0; i < maxPop; i++) {
     playerIds.push(i)
 }
 var bullets = []
-var despawnedBullets = []
 var bulletIds = []
 var maxBullets = 2000
 var bulletPool = [...Array(maxBullets)].map(() => ({}))
@@ -369,6 +368,7 @@ function handleKeyDown(player, data) {
             if (player.gameplayer.ammo < player.gameplayer.maxAmmo) {
                 var p = player.gameplayer
                 p.reloadingTimeout = gunStats[p.gun].reload
+                p.shootingTimeout = 0
             }
             break
         default:
@@ -725,6 +725,10 @@ var update = function () {
         p.recoilY = 0
         p.hp = 100
         p.maxHp = p.hp
+        if(![0, 1, 2, 3].includes(p.armorSelection)) {
+          kick(ps)
+          return
+        }
         p.armor = armorStats[p.armorSelection.toString()].health
         p.maxArmor = p.armor
         p.score = 0
@@ -795,6 +799,7 @@ var update = function () {
         if ((p.left || p.right || p.down || p.up || p.mouse) && p.invincible) {
             p.invincible = false
         }
+        //welcome to the land of spaghetti
         if (!p.left || (p.left && p.right)) {
             if (p.spdX < 0) {
                 p.spdX -= Math.floor(.0625 * p.spdX) - Math.floor(.03 * p.maxSpeed)
@@ -1052,6 +1057,9 @@ var update = function () {
         p.oldChatboxOpen = p.chatboxOpen
         p.oldScore = p.score
         p.oldRadius = p.radius
+        p.oldAmmo = p.ammo
+        p.oldReloading = (p.reloadingTimeout > 0)
+        p.oldShooting = (p.shootingTimeout != 0)
         if (p.recentlyDied) p.recentlyDied = false
     }
 }
@@ -1105,8 +1113,42 @@ function updateBullets() {
         bullets[i].x += bullets[i].spdX
         bullets[i].y += bullets[i].spdY
 
-        var playersInView = quadtree.query(new Box(bullets[i].x - 500, bullets[i].y - 500, bullets[i].x + 500, bullets[i].y + 500))
-        playersInView = playersInView.filter((p) => p.type == "player")
+        var inView = quadtree.query(new Box(bullets[i].x - 500, bullets[i].y - 500, bullets[i].x + 500, bullets[i].y + 500))
+        var objectsInView = inView.filter((obj) => obj.type == "object")
+        for (var j in objectsInView) {
+            var o = objectsInView[j]
+            if (o.objType == 1) {
+                o.width = 1000
+                o.height = 1000
+            }
+            else if (o.objType == 2) {
+                if (o.orientation == 1) {
+                    o.width = 1000
+                    o.height = 500
+                }
+                else if (o.orientation == 2) {
+                    o.width = 500
+                    o.height = 1000
+                }
+            }
+            var intercepts = rectLineIntercepts(o,
+                {
+                    p1: {
+                        x: bullets[i].x,
+                        y: bullets[i].y
+                    },
+                    p2: {
+                        x: bullets[i].x + bullets[i].spdX,
+                        y: bullets[i].y + bullets[i].spdY
+                    }
+                }
+            )
+            if (intercepts.length > 0) {
+                bullets[i].intersected = true
+            }
+        }
+
+        var playersInView = inView.filter((p) => p.type == "player")
         for (var j in playersInView) {
             var p = playerPool[playersInView[j].id]
             if (p.playerId == bullets[i].ownerId || bullets[i].intersected || p.invincible || p.dying) continue
@@ -1132,12 +1174,20 @@ function updateBullets() {
                     dmgDealt += p.armor
                     p.armor = 0
                 }
-                p.hp -= dmg - dmgDealt
+                if (p.hp > 0 && p.hp >= dmg - dmgDealt && dmgDealt < dmg) {
+                    p.hp -= dmg - dmgDealt
+                    dmgDealt += dmg - dmgDealt
+                }
+                else if (p.hp > 0 && dmgDealt < dmg) {
+                    dmgDealt += p.hp
+                    p.hp = 0
+                }
                 if (p.hp <= 0) {
                     p.hp = 0
                     p.dying = true
                 }
                 bullets[i].intersected = true
+                playerPool[bullets[i].ownerId].score += dmgDealt
             }
         }
 
@@ -1148,7 +1198,7 @@ function updateBullets() {
 
         if (bullets[i].intersected) {
             bulletPool[bullets[i].id] = {}
-            despawnedBullets.push(bullets[i])
+            bulletIds.push(bullets[i].id)
             bullets.splice(i, 1)
             continue
         }
@@ -1157,8 +1207,82 @@ function updateBullets() {
     }
 }
 
+function rectLineIntercepts(rect, line) {
+    var intercepts = []
+    var lines = [
+        {
+            p1: {
+                x: rect.x - rect.width / 2,
+                y: rect.y - rect.height / 2
+            },
+            p2: {
+                x: rect.x + rect.width / 2,
+                y: rect.y - rect.height / 2
+            }
+        },
+        {
+            p1: {
+                x: rect.x + rect.width / 2,
+                y: rect.y - rect.height / 2
+            },
+            p2: {
+                x: rect.x + rect.width / 2,
+                y: rect.y + rect.height / 2
+            }
+        },
+        {
+            p1: {
+                x: rect.x + rect.width / 2,
+                y: rect.y + rect.height / 2
+            },
+            p2: {
+                x: rect.x - rect.width / 2,
+                y: rect.y + rect.height / 2
+            }
+        },
+        {
+            p1: {
+                x: rect.x - rect.width / 2,
+                y: rect.y + rect.height / 2
+            },
+            p2: {
+                x: rect.x - rect.width / 2,
+                y: rect.y - rect.height / 2
+            }
+        }
+    ]
+    for (var i in lines) {
+        var intercept = lineIntercept(line, lines[i])
+        if (intercept != null) intercepts.push(intercept)
+    }
+    return intercepts
+}
+
+//check if 2 lines intersect
+function lineIntercept(line1, line2) {
+    var x1 = line1.p1.x
+    var y1 = line1.p1.y
+    var x2 = line1.p2.x
+    var y2 = line1.p2.y
+    var x3 = line2.p1.x
+    var y3 = line2.p1.y
+    var x4 = line2.p2.x
+    var y4 = line2.p2.y
+    var den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+    if (den == 0) return null
+    var t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den
+    var u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / den
+    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+        return {
+            x: x1 + t * (x2 - x1),
+            y: y1 + t * (y2 - y1)
+        }
+    }
+    return null
+}
+
 function circleLineIntercepts(circle, line) {
-    //credit to Blindman67 on stackoverflow, decent time saver, I just tweaked his algorithm a bit
+    //credit to Blindman67 on stackoverflow, good time saver, I just tweaked his algorithm a bit
     var a, b, c, d, u1, u2, ret, retP1, retP2, v1, v2
     v1 = {}
     v2 = {}
@@ -1196,12 +1320,13 @@ function createBullets() {
         var p = players[i].gameplayer
         if (!p.spawned || p.dying) continue
         var stats = gunStats[p.gun]
-        p.recoilX *= 0.8
-        p.recoilY *= 0.8
+        p.recoilX *= 0.85
+        p.recoilY *= 0.85
         if (p.recoilX < 1 && p.recoilX > -1) p.recoilX = 0
         if (p.recoilY < 1 && p.recoilY > -1) p.recoilY = 0
         if (p.ammo <= 0 && p.reloadingTimeout <= 0) {
             p.reloadingTimeout = stats.reload
+            p.shootingTimeout = 0
             continue
         }
         if (p.reloadingTimeout > 0) {
@@ -1213,8 +1338,11 @@ function createBullets() {
             p.shootingTimeout--
             if (p.shootingTimeout > 0) continue
         }
-        if (p.mouse && p.shootingTimeout == 0) {
-            var variation = Math.round(Math.random() * stats.spread - stats.spread / 2)
+        if (p.mouse && p.shootingTimeout <= 0) {
+            var speed = Math.sqrt((p.spdX - p.recoilX) ** 2 + (p.spdY - p.recoilY) ** 2)
+            var varianceFactor = speed === 0 ? 1 : speed > 20 ? 2 : 1.5
+            var spread = stats.spread * varianceFactor
+            var variation = Math.round(Math.random() * spread - spread / 2)
             var point1 = pointOnCircle(p.x + p.spdX, p.y + p.spdY, p.radius, p.angle - 90)
             var point2 = extend(p.angle + variation, stats.offset, point1.x, point1.y)
             var bulletSpeed = pointOnCircle(0, 0, stats.speed, p.angle + variation)
@@ -1272,7 +1400,7 @@ function handleDeaths() {
         var p = players[i].gameplayer
         if (p.dying && p.radius > 0) {
             p.radius -= 8
-            if (p.radius <= 8) {
+            if (p.radius <= 8 && !p.dead) {
                 p.dead = true
                 p.recentlyDied = true
                 quadtree.remove({ x: p.x, y: p.y, id: p.playerId, type: "player" })
@@ -1301,8 +1429,8 @@ function buildPlayerPacketMain(p) {
     dv.setUint8(1, p.playerId)
     dv.setUint32(2, p.x)
     dv.setUint32(6, p.y)
-    dv.setUint16(10, p.spdX + p.recoilX + 300)
-    dv.setUint16(12, p.spdY + p.recoilY + 300)
+    dv.setUint16(10, p.spdX - p.recoilX + 300)
+    dv.setUint16(12, p.spdY - p.recoilY + 300)
     dv.setUint8(14, p.angle)
     dv.setUint16(16, 65535)
     return buf
@@ -1316,10 +1444,14 @@ function buildPlayerPacketExt(p) {
         p.oldChatboxOpen == p.chatboxOpen &&
         p.oldChatMsg == p.chatMsg &&
         p.oldScore == p.score &&
-        p.oldRadius == p.radius
-    ) return new ArrayBuffer(0)
-    else {
-        var buf = new ArrayBuffer(11)
+        p.oldRadius == p.radius &&
+        p.oldAmmo == p.ammo &&
+        p.oldReloading == (p.reloadingTimeout > 0) &&
+        p.oldShooting == (p.shootingTimeout != 0)
+    ) {
+		return new ArrayBuffer(0)
+	} else {
+        var buf = new ArrayBuffer(14)
         var dv = new DataView(buf)
         dv.setUint8(0, updateTypes.ext)
         dv.setUint8(1, p.playerId)
@@ -1329,6 +1461,9 @@ function buildPlayerPacketExt(p) {
         dv.setUint8(5, Number(p.chatboxOpen))
         dv.setUint32(6, p.score)
         dv.setUint8(10, p.radius)
+        dv.setUint8(11, p.ammo)
+        dv.setUint8(12, Number(p.reloadingTimeout > 0))
+        dv.setUint8(13, Number(p.shootingTimeout != 0))
         if (p.oldChatMsg != p.chatMsg) buf = appendBuffer(buf, toArrayBuffer(p.chatMsg))
         var buf2 = new ArrayBuffer(2)
         var dv2 = new DataView(buf2)
@@ -1373,10 +1508,12 @@ function buildPlayersInViewPacketExt(p) {
             player.oldArmor == player.armor &&
             player.oldChatboxOpen == player.chatboxOpen &&
             player.oldChatMsg == player.chatMsg &&
-            player.oldRadius == player.radius
+            player.oldRadius == player.radius &&
+            player.oldReloading == (player.reloadingTimeout > 0) &&
+            player.oldShooting == (player.shootingTimeout != 0)
         ) continue
         else {
-            var buf2 = new ArrayBuffer(7)
+            var buf2 = new ArrayBuffer(9)
             var dv = new DataView(buf2)
             dv.setUint8(0, updateTypes.ext)
             dv.setUint8(1, player.playerId)
@@ -1385,6 +1522,8 @@ function buildPlayersInViewPacketExt(p) {
             dv.setUint8(4, player.armor)
             dv.setUint8(5, Number(player.chatboxOpen))
             dv.setUint8(6, player.radius)
+            dv.setUint8(7, Number(player.reloadingTimeout > 0))
+            dv.setUint8(8, Number(player.shootingTimeout != 0))
             if (player.oldChatMsg != player.chatMsg) buf2 = appendBuffer(buf2, toArrayBuffer(player.chatMsg))
             var buf3 = new ArrayBuffer(2)
             var dv2 = new DataView(buf3)
@@ -1450,6 +1589,14 @@ function buildPlayersExitingViewPacket(p) {
             p.inView.players.splice(i, 1)
         }
     }
+    if (p.recentlyDied) {
+        var buf2 = new ArrayBuffer(4)
+        var dv = new DataView(buf2)
+        dv.setUint8(0, updateTypes.playerLeave)
+        dv.setUint8(1, p.playerId)
+        dv.setUint16(2, 65535)
+        buf = appendBuffer(buf, buf2)
+    }
     return buf
 }
 
@@ -1499,10 +1646,9 @@ function buildObjectsExitingViewPacket(p) {
 function buildNewBulletsInViewPacket(p) {
     var buf = new ArrayBuffer(0)
     var bulletsInView = quadtree.query(new Box(p.x - (p.vx * 14 / 2), p.y - (p.vy * 14 / 2), p.vx * 14, p.vy * 14))
-    bulletsInView = bulletsInView.filter((obj) => { return obj.type == "bullet" })
-    for (var i in bulletsInView) {
-        var bullet = bulletPool[bulletsInView[i].id]
-        
+    for (var bulletInView of bulletsInView) {
+		if (bulletInView.type != "bullet") continue
+        var bullet = bulletPool[bulletInView.id]
         if (p.inView.bullets.includes(bullet.id)) continue
         p.inView.bullets.push(bullet.id)
         var buf2 = new ArrayBuffer(22)
