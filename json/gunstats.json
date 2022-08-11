@@ -1,102 +1,37 @@
 {
-  "0": {
-    "fireRate": 30,
-    "ammo": 32,
-    "dmg": 75,
-    "dmgDrop": 1,
-    "weight": 14,
-    "reload": 40,
-    "travelTime": 19,
-    "speed": 25
-  },
-  "1": {
-    "fireRate": 4,
-    "ammo": 32,
-    "dmg": 40,
-    "dmgDrop": 1,
-    "weight": 18,
-    "reload": 40,
-    "travelTime": 10,
-    "speed": 20
-  },
-  "2": {
-    "fireRate": 4,
-    "ammo": 32,
-    "dmg": 40,
-    "dmgDrop": 1,
-    "weight": 18,
-    "reload": 40,
-    "travelTime": 10,
-    "speed": 20
-  },
-  "3": {
-    "fireRate": 4,
-    "ammo": 32,
-    "dmg": 40,
-    "dmgDrop": 1,
-    "weight": 18,
-    "reload": 40,
-    "travelTime": 10,
-    "speed": 20
-  },
-  "4": {
-    "fireRate": 4,
-    "ammo": 32,
-    "dmg": 40,
-    "dmgDrop": 1,
-    "weight": 18,
-    "reload": 40,
-    "travelTime": 10,
-    "speed": 20
-  },
-  "5": {
-    "fireRate": 4,
-    "ammo": 32,
-    "dmg": 40,
-    "dmgDrop": 1,
-    "weight": 18,
-    "reload": 40,
-    "travelTime": 10,
-    "speed": 20
-  },
-  "6": {
-    "fireRate": 4,
-    "ammo": 32,
-    "dmg": 40,
-    "dmgDrop": 1,
-    "weight": 18,
-    "reload": 40,
-    "travelTime": 10,
-    "speed": 20
-  },
-  "7": {
-    "fireRate": 4,
-    "ammo": 32,
-    "dmg": 40,
-    "dmgDrop": 1,
-    "weight": 18,
-    "reload": 40,
-    "travelTime": 10,
-    "speed": 20
-  },
-  "8": {
-    "fireRate": 4,
-    "ammo": 32,
-    "dmg": 40,
-    "dmgDrop": 1,
-    "weight": 18,
-    "reload": 40,
-    "travelTime": 10,
-    "speed": 20
-  },
-  "9": {
-    "fireRate": 4,
-    "ammo": 32,
-    "dmg": 40,
-    "dmgDrop": 1,
-    "weight": 18,
-    "reload": 40,
-    "travelTime": 10,
-    "speed": 20
-  }
+    "0": {
+        "fireRate": 2,
+        "ammo": 30,
+        "dmg": 30,
+        "dmgDrop": 1,
+        "spread": 8,
+        "recoil": 5,
+        "weight": 18,
+        "reload": 40,
+        "travelTime": 14,
+        "speed": 200,
+        "offset": 500,
+        "bulletWidth": 2,
+        "bulletLength": 5
+    },
+    "1": {
+        "fireRate": 30,
+        "ammo": 32,
+        "dmg": 75,
+        "dmgDrop": 1,
+        "weight": 14,
+        "reload": 40,
+        "travelTime": 19,
+        "speed": 25
+    },
+    "2": {
+        "fireRate": 4,
+        "ammo": 32,
+        "dmg": 40,
+        "dmgDrop": 1,
+        "weight": 18,
+        "reload": 40,
+        "travelTime": 10,
+        "speed": 20
+    }
 }
